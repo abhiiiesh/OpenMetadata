@@ -35,6 +35,7 @@ import { WorkflowStatus } from '../../generated/governance/workflows/workflowIns
 import { Include } from '../../generated/type/include';
 import { usePaging } from '../../hooks/paging/usePaging';
 import { useApplicationStore } from '../../hooks/useApplicationStore';
+import { useCustomPages } from '../../hooks/useCustomPages';
 import { useFqn } from '../../hooks/useFqn';
 import { useTableFilters } from '../../hooks/useTableFilters';
 import { getApplicationList } from '../../rest/applicationAPI';
@@ -246,6 +247,13 @@ jest.mock('../../hooks/useApplicationStore', () => ({
       teams: [],
     },
   })),
+}));
+
+jest.mock('../../hooks/useCustomPages', () => ({
+  useCustomPages: jest.fn().mockReturnValue({
+    customizedPage: null,
+    isLoading: false,
+  }),
 }));
 
 jest.mock('react-router-dom', () => ({
@@ -615,6 +623,31 @@ describe('ServiceDetailsPage', () => {
 
       expect(screen.getByTestId('data-assets-header')).toBeInTheDocument();
       expect(screen.getByTestId('tabs')).toBeInTheDocument();
+    });
+
+    it('should apply persona customization on service detail tabs', async () => {
+      (useCustomPages as jest.Mock).mockReturnValue({
+        customizedPage: {
+          tabs: [
+            {
+              id: EntityTabs.CONNECTION,
+              displayName: 'Connection Settings',
+            },
+          ],
+        },
+        isLoading: false,
+      });
+
+      await renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('service-page')).toBeInTheDocument();
+      });
+
+      const tabLabels = screen.getAllByTestId('tabs-label');
+
+      expect(tabLabels).toHaveLength(1);
+      expect(screen.getByText('Connection Settings')).toBeInTheDocument();
     });
 
     it('should render error placeholder when service is not found', async () => {
