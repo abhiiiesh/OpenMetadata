@@ -88,9 +88,11 @@ import { IngestionPipeline } from '../../generated/entity/services/ingestionPipe
 import { WorkflowStatus } from '../../generated/governance/workflows/workflowInstance';
 import { Include } from '../../generated/type/include';
 import { Paging } from '../../generated/type/paging';
+import { PageType } from '../../generated/system/ui/page';
 import { useAuth } from '../../hooks/authHooks';
 import { usePaging } from '../../hooks/paging/usePaging';
 import { useApplicationStore } from '../../hooks/useApplicationStore';
+import { useCustomPages } from '../../hooks/useCustomPages';
 import { useFqn } from '../../hooks/useFqn';
 import { useTableFilters } from '../../hooks/useTableFilters';
 import { ConfigData, ServicesType } from '../../interface/service.interface';
@@ -146,6 +148,10 @@ import {
   getPrioritizedViewPermission,
 } from '../../utils/PermissionsUtils';
 import {
+  getDetailsTabWithNewLabel,
+  getTabLabelMapFromTabs,
+} from '../../utils/CustomizePage/CustomizePageUtils';
+import {
   getEditConnectionPath,
   getServiceDetailsPath,
   getServiceVersionPath,
@@ -197,6 +203,7 @@ const ServiceDetailsPage: FunctionComponent = () => {
     [decodedServiceFQN]
   );
   const { getEntityPermissionByFqn, permissions } = usePermissionProvider();
+  const { customizedPage } = useCustomPages('Service' as PageType);
   const navigate = useNavigate();
   const { isAdminUser } = useAuth();
   const ingestionPagingInfo = usePaging();
@@ -1721,6 +1728,7 @@ const ServiceDetailsPage: FunctionComponent = () => {
 
   const tabs: TabsProps['items'] = useMemo(() => {
     const tabs = [];
+    const tabLabelMap = getTabLabelMapFromTabs(customizedPage?.tabs);
     const ownerIds = serviceDetails?.owners?.map((owner) => owner.id) ?? [];
     const userOwnsService = ownerIds.includes(currentUser?.id ?? '');
     const userInOwnerTeam = Boolean(
@@ -1736,9 +1744,10 @@ const ServiceDetailsPage: FunctionComponent = () => {
     };
 
     if (!isMetadataService && !isSecurityService) {
+      const countTabKey = getCountLabel(serviceCategory).toLowerCase();
       tabs.push(
         {
-          name: t('label.insight-plural'),
+          name: tabLabelMap[EntityTabs.INSIGHTS] ?? t('label.insight-plural'),
           key: EntityTabs.INSIGHTS,
           children: (
             <ServiceInsightsTab
@@ -1752,8 +1761,10 @@ const ServiceDetailsPage: FunctionComponent = () => {
           ),
         },
         {
-          name: getCountLabel(serviceCategory),
-          key: getCountLabel(serviceCategory).toLowerCase(),
+          name:
+            tabLabelMap[countTabKey as EntityTabs] ??
+            getCountLabel(serviceCategory),
+          key: countTabKey,
           count: paging.total,
           children: (
             <ServiceMainTabContent
@@ -1780,7 +1791,7 @@ const ServiceDetailsPage: FunctionComponent = () => {
 
     if (serviceCategory === ServiceCategory.DASHBOARD_SERVICES) {
       tabs.push({
-        name: t('label.data-model'),
+        name: tabLabelMap[EntityTabs.DATA_Model] ?? t('label.data-model'),
         key: EntityTabs.DATA_Model,
         count: dataModelPaging.total,
         children: (
@@ -1795,7 +1806,7 @@ const ServiceDetailsPage: FunctionComponent = () => {
     if (serviceCategory === ServiceCategory.DRIVE_SERVICES) {
       tabs.push(
         {
-          name: t('label.file-plural'),
+          name: tabLabelMap[EntityTabs.FILES] ?? t('label.file-plural'),
           key: EntityTabs.FILES,
           count: filesPaging.total,
           children: (
@@ -1813,7 +1824,9 @@ const ServiceDetailsPage: FunctionComponent = () => {
           ),
         },
         {
-          name: t('label.spreadsheet-plural'),
+          name:
+            tabLabelMap[EntityTabs.SPREADSHEETS] ??
+            t('label.spreadsheet-plural'),
           key: EntityTabs.SPREADSHEETS,
           count: spreadsheetsPaging.total,
           children: (
@@ -1835,7 +1848,7 @@ const ServiceDetailsPage: FunctionComponent = () => {
 
     if (!isSecurityService) {
       tabs.push({
-        name: t('label.agent-plural'),
+        name: tabLabelMap[EntityTabs.AGENTS] ?? t('label.agent-plural'),
         key: EntityTabs.AGENTS,
         isHidden: !showIngestionTab,
         count: ingestionPaging.total + collateAgentPaging.total,
@@ -1844,7 +1857,7 @@ const ServiceDetailsPage: FunctionComponent = () => {
     }
 
     tabs.push({
-      name: t('label.connection'),
+      name: tabLabelMap[EntityTabs.CONNECTION] ?? t('label.connection'),
       isHidden: !servicePermission.EditAll,
       key: EntityTabs.CONNECTION,
       children: testConnectionTab,
@@ -1872,7 +1885,10 @@ const ServiceDetailsPage: FunctionComponent = () => {
     // Merge core tabs and plugin tabs
     const allTabs = [...tabs, ...pluginTabs];
 
-    return allTabs
+    const defaultVisibleTab =
+      allTabs.find((item) => !item.isHidden)?.key ?? EntityTabs.INSIGHTS;
+
+    const tabItems = allTabs
       .filter((tab) => !tab.isHidden)
       .map((tab) => ({
         label: (
@@ -1886,6 +1902,12 @@ const ServiceDetailsPage: FunctionComponent = () => {
         key: tab.key,
         children: tab.children,
       }));
+
+    return getDetailsTabWithNewLabel(
+      tabItems,
+      customizedPage?.tabs,
+      defaultVisibleTab as EntityTabs
+    );
   }, [
     currentUser,
     currentPage,
@@ -1900,6 +1922,7 @@ const ServiceDetailsPage: FunctionComponent = () => {
     data,
     isServiceLoading,
     getOtherDetails,
+    customizedPage?.tabs,
     saveUpdatedServiceData,
     dataModelPaging,
     ingestionPaging,
